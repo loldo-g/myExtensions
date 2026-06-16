@@ -1,318 +1,151 @@
 // Extensão para Gandi IDE - Discord Bot Connect
-class DiscordGandiExt {
-    constructor() {
-        this.token = '';
-        this.ws = null;
-        this.runtime = null;
-        this.heartbeatInterval = null;
-        this.signature = "\n\n-# by loldo_gg on discord";
-        this.lastTexto = '';
-        this.lastSender = '';
-        this.lastSenderId = '';
-        this.lastRoles = '';
-        this.isConnected = false;
-    }
-
-    getInfo() {
-        return {
-            id: 'discordGandiLoldo',
-            name: 'Discord Bot Connect',
-            color1: '#5865F2',
-            color2: '#404EED',
-            blocks: [
-                {
-                    opcode: 'definirToken',
-                    blockType: 'command',
-                    text: 'Conectar ao Bot com o Token [TOKEN]',
-                    arguments: {
-                        TOKEN: { type: 'string', defaultValue: 'seu_token_aqui' }
-                    }
-                },
-                {
-                    opcode: 'enviarMensagem',
-                    blockType: 'command',
-                    text: 'Enviar mensagem [TEXTO] no Canal ID [CANAL]',
-                    arguments: {
-                        TEXTO: { type: 'string', defaultValue: 'Olá Mundo!' },
-                        CANAL: { type: 'string', defaultValue: '1234567890' }
-                    }
-                },
-                {
-                    opcode: 'enviarEmbed',
-                    blockType: 'command',
-                    text: 'Enviar Embed Titulo: [TITULO] Descrição: [DESC] Cor Hex: [COR] no Canal ID [CANAL]',
-                    arguments: {
-                        TITULO: { type: 'string', defaultValue: 'Aviso!' },
-                        DESC: { type: 'string', defaultValue: 'Algo aconteceu.' },
-                        COR: { type: 'string', defaultValue: '#FF0000' },
-                        CANAL: { type: 'string', defaultValue: '1234567890' }
-                    }
-                },
-                {
-                    opcode: 'quandoMensagemRecebida',
-                    blockType: 'hat',
-                    text: 'quando mensagem do discord recebida',
-                    isEdgeActivated: false
-                },
-                {
-                    opcode: 'retornarTexto',
-                    blockType: 'reporter',
-                    text: 'TEXTO'
-                },
-                {
-                    opcode: 'retornarSender',
-                    blockType: 'reporter',
-                    text: 'SENDER'
-                },
-                {
-                    opcode: 'retornarSenderId',
-                    blockType: 'reporter',
-                    text: 'SENDER-ID'
-                },
-                {
-                    opcode: 'retornarRoles',
-                    blockType: 'reporter',
-                    text: 'ROLES'
-                }
-            ]
-        };
-    }
-
-    definirToken(args, util) {
-        this.token = args.TOKEN;
-        this.runtime = util.runtime;
-        
-        if (this.ws) {
-            this.disconnect();
+(function() {
+    class DiscordGandiExt {
+        constructor() {
+            this.token = '';
+            this.signature = "\n\n-# by loldo_gg on discord";
         }
-        
-        this.connectWebSocket();
-    }
 
-    connectWebSocket() {
-        try {
-            this.ws = new WebSocket('wss://gateway.discord.gg/?v=10&encoding=json');
-
-            this.ws.onopen = () => {
-                console.log('✅ Conectado ao Discord Gateway');
-                this.isConnected = true;
-            };
-
-            this.ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    this.handleMessage(data);
-                } catch (error) {
-                    console.error('❌ Erro ao processar mensagem:', error);
-                }
-            };
-
-            this.ws.onerror = (error) => {
-                console.error('❌ Erro no WebSocket:', error);
-                this.isConnected = false;
-            };
-
-            this.ws.onclose = (event) => {
-                console.log('🔌 WebSocket fechado:', event.code, event.reason);
-                this.isConnected = false;
-                if (this.heartbeatInterval) {
-                    clearInterval(this.heartbeatInterval);
-                    this.heartbeatInterval = null;
-                }
-            };
-        } catch (error) {
-            console.error('❌ Erro ao conectar WebSocket:', error);
-        }
-    }
-
-    handleMessage(data) {
-        const { op, t, d } = data;
-
-        switch(op) {
-            case 10:
-                const heartbeatInterval = d.heartbeat_interval;
-                if (this.heartbeatInterval) {
-                    clearInterval(this.heartbeatInterval);
-                }
-                this.heartbeatInterval = setInterval(() => {
-                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                        this.ws.send(JSON.stringify({ op: 1, d: null }));
-                    }
-                }, heartbeatInterval);
-
-                if (this.token) {
-                    this.ws.send(JSON.stringify({
-                        op: 2,
-                        d: {
-                            token: this.token,
-                            capabilities: 511,
-                            properties: { 
-                                os: 'windows', 
-                                browser: 'chrome', 
-                                device: 'gandi' 
-                            },
-                            presence: { 
-                                status: 'online', 
-                                afk: false 
-                            },
-                            intents: 33280
+        getInfo() {
+            return {
+                id: 'discordGandiLoldo',
+                name: 'Discord Bot',
+                color1: '#5865F2',
+                color2: '#404EED',
+                blocks: [
+                    {
+                        opcode: 'setToken',
+                        blockType: 'command',
+                        text: 'definir token [TOKEN]',
+                        arguments: {
+                            TOKEN: {
+                                type: 'string',
+                                defaultValue: 'seu_token_aqui'
+                            }
                         }
-                    }));
-                }
-                break;
-
-            case 0:
-                if (t === 'MESSAGE_CREATE') {
-                    this.handleMessageCreate(d);
-                }
-                break;
-
-            case 11:
-                console.log('💓 Heartbeat confirmado');
-                break;
+                    },
+                    {
+                        opcode: 'sendMessage',
+                        blockType: 'command',
+                        text: 'enviar mensagem [TEXTO] para canal [CANAL]',
+                        arguments: {
+                            TEXTO: {
+                                type: 'string',
+                                defaultValue: 'Olá Mundo!'
+                            },
+                            CANAL: {
+                                type: 'string',
+                                defaultValue: 'ID_DO_CANAL'
+                            }
+                        }
+                    },
+                    {
+                        opcode: 'sendEmbed',
+                        blockType: 'command',
+                        text: 'enviar embed titulo [TITULO] desc [DESC] cor [COR] canal [CANAL]',
+                        arguments: {
+                            TITULO: {
+                                type: 'string',
+                                defaultValue: 'Título'
+                            },
+                            DESC: {
+                                type: 'string',
+                                defaultValue: 'Descrição'
+                            },
+                            COR: {
+                                type: 'string',
+                                defaultValue: '#FF0000'
+                            },
+                            CANAL: {
+                                type: 'string',
+                                defaultValue: 'ID_DO_CANAL'
+                            }
+                        }
+                    }
+                ]
+            };
         }
-    }
 
-    handleMessageCreate(d) {
-        if (d.author.bot) return;
-        if (d.author.id === this.getBotId()) return;
+        setToken(args) {
+            this.token = args.TOKEN;
+            console.log('Token definido!');
+        }
 
-        this.lastTexto = d.content || '';
-        this.lastSender = d.author.username || 'Desconhecido';
-        this.lastSenderId = d.author.id || '';
-        this.lastRoles = d.member?.roles?.join(', ') || '';
+        async sendMessage(args) {
+            if (!this.token) {
+                console.error('Token não definido!');
+                return;
+            }
 
-        if (this.runtime) {
             try {
-                this.runtime.startHats('discordGandiLoldo_quandoMensagemRecebida');
+                const response = await fetch(`https://discord.com/api/v10/channels/${args.CANAL}/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bot ${this.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        content: args.TEXTO + this.signature
+                    })
+                });
+
+                if (response.ok) {
+                    console.log('Mensagem enviada!');
+                } else {
+                    const error = await response.json();
+                    console.error('Erro:', error);
+                }
             } catch (error) {
-                console.error('❌ Erro ao iniciar hats:', error);
+                console.error('Erro:', error);
             }
         }
-    }
 
-    getBotId() {
-        try {
-            const payload = this.token.split('.')[0];
-            const decoded = atob(payload);
-            const data = JSON.parse(decoded);
-            return data.id || '';
-        } catch {
-            return '';
-        }
-    }
-
-    async enviarMensagem(args) {
-        if (!this.token) {
-            console.error('❌ Token não definido');
-            return;
-        }
-        
-        const canalId = args.CANAL.trim();
-        if (!canalId || !/^\d+$/.test(canalId)) {
-            console.error('❌ ID do canal inválido:', canalId);
-            return;
-        }
-
-        try {
-            const response = await fetch(`https://discord.com/api/v10/channels/${canalId}/messages`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bot ${this.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ 
-                    content: args.TEXTO + this.signature 
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('❌ Erro ao enviar mensagem:', errorData);
-            } else {
-                console.log('✅ Mensagem enviada com sucesso');
-            }
-        } catch (error) {
-            console.error('❌ Erro na requisição:', error);
-        }
-    }
-
-    async enviarEmbed(args) {
-        if (!this.token) {
-            console.error('❌ Token não definido');
-            return;
-        }
-
-        const canalId = args.CANAL.trim();
-        if (!canalId || !/^\d+$/.test(canalId)) {
-            console.error('❌ ID do canal inválido:', canalId);
-            return;
-        }
-
-        try {
-            const corHex = args.COR.replace('#', '');
-            const corInt = parseInt(corHex, 16);
-            if (isNaN(corInt)) {
-                console.error('❌ Cor inválida, usando vermelho como padrão');
+        async sendEmbed(args) {
+            if (!this.token) {
+                console.error('Token não definido!');
+                return;
             }
 
-            const response = await fetch(`https://discord.com/api/v10/channels/${canalId}/messages`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bot ${this.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    embeds: [{
-                        title: args.TITULO || 'Sem título',
-                        description: (args.DESC || '') + this.signature,
-                        color: isNaN(corInt) ? 0xFF0000 : corInt
-                    }]
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('❌ Erro ao enviar embed:', errorData);
-            } else {
-                console.log('✅ Embed enviado com sucesso');
-            }
-        } catch (error) {
-            console.error('❌ Erro na requisição:', error);
-        }
-    }
-
-    disconnect() {
-        if (this.heartbeatInterval) {
-            clearInterval(this.heartbeatInterval);
-            this.heartbeatInterval = null;
-        }
-        
-        if (this.ws) {
             try {
-                this.ws.close(1000, 'Desconectando manualmente');
+                const corHex = args.COR.replace('#', '');
+                const corInt = parseInt(corHex, 16) || 0;
+
+                const response = await fetch(`https://discord.com/api/v10/channels/${args.CANAL}/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bot ${this.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        embeds: [{
+                            title: args.TITULO,
+                            description: args.DESC + this.signature,
+                            color: corInt
+                        }]
+                    })
+                });
+
+                if (response.ok) {
+                    console.log('Embed enviado!');
+                } else {
+                    const error = await response.json();
+                    console.error('Erro:', error);
+                }
             } catch (error) {
-                console.error('❌ Erro ao fechar WebSocket:', error);
+                console.error('Erro:', error);
             }
-            this.ws = null;
         }
-        
-        this.isConnected = false;
     }
 
-    retornarTexto() { return this.lastTexto || ''; }
-    retornarSender() { return this.lastSender || ''; }
-    retornarSenderId() { return this.lastSenderId || ''; }
-    retornarRoles() { return this.lastRoles || ''; }
-}
-
-// Registro para Gandi IDE
-if (typeof Scratch !== 'undefined' && Scratch.extensions) {
-    Scratch.extensions.register(new DiscordGandiExt());
-} else if (typeof window !== 'undefined') {
-    // Fallback para Gandi IDE
-    window.DiscordGandiExt = DiscordGandiExt;
-    if (window.Scratch && window.Scratch.extensions) {
-        window.Scratch.extensions.register(new DiscordGandiExt());
+    // Registro para Gandi IDE
+    if (typeof Scratch !== 'undefined' && Scratch.extensions) {
+        Scratch.extensions.register(new DiscordGandiExt());
+    } else {
+        // Para quando carregar como script
+        window.addEventListener('load', function() {
+            if (typeof Scratch !== 'undefined' && Scratch.extensions) {
+                Scratch.extensions.register(new DiscordGandiExt());
+            }
+        });
     }
-}
+})();
